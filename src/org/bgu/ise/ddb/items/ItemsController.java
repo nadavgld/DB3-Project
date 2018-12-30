@@ -9,6 +9,9 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Date;
 
 import javax.servlet.http.HttpServletResponse;
@@ -35,23 +38,8 @@ import com.mongodb.DBObject;
 @RequestMapping(value = "/items")
 public class ItemsController extends ParentController {
 
-	private Connection connection =null;
-	private String username="zaksg";
-	private String password="abcd";
-	private String connectionUrl="jdbc:oracle:thin:@ora1.ise.bgu.ac.il:1521/oracle";
-	private final String driver="oracle.jdbc.driver.OracleDriver";
-
-	private void ConnectToOracleDB()
-	{
-		try 
-		{
-			Class.forName(this.driver); //registration of the driver
-			this.connection = DriverManager.getConnection(this.connectionUrl, this.username, this.password);
-			this.connection.setAutoCommit(false);
-		}catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+	private Connection connection = null;
+	
 	/**
 	 * The function copy all the items(title and production year) from the Oracle
 	 * table MediaItems to the System storage. The Oracle table and data should be
@@ -59,11 +47,37 @@ public class ItemsController extends ParentController {
 	 */
 	@RequestMapping(value = "fill_media_items", method = { RequestMethod.GET })
 	public void fillMediaItems(HttpServletResponse response) {
-		System.out.println("was here");
-		ConnectToOracleDB();
-		// :TODO your implementation
-		HttpStatus status = HttpStatus.OK;
-		response.setStatus(status.value());
+		ResultSet rs = null;
+		PreparedStatement ps = null;
+		try {
+			
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+			connection = DriverManager.getConnection("jdbc:oracle:thin:@ora1.ise.bgu.ac.il:1521/oracle", "zaksg", "abcd");
+			connection.setAutoCommit(false);
+
+			ps = connection.prepareStatement("SELECT title,prod_year FROM MediaItems");
+			rs = ps.executeQuery();
+
+			DBCollection collection = this.getCollection("items");
+			while (rs.next()) {
+				String title = rs.getString(1);
+				int year = rs.getInt(2);
+
+				System.out.println(title);
+				if (!isTitleExists(title))
+					collection.insert(new BasicDBObject().append("title", title).append("year", year));
+			}
+			rs.close();
+			this.mongoClient.close();
+
+			HttpStatus status = HttpStatus.OK;
+			response.setStatus(status.value());
+		} catch (Exception e) {
+			e.printStackTrace();
+			
+			HttpStatus status = HttpStatus.BAD_REQUEST;
+			response.setStatus(status.value());
+		}
 	}
 
 	/**
@@ -89,8 +103,8 @@ public class ItemsController extends ParentController {
 				String year = line.split(",")[1];
 
 				DBCollection collection = this.getCollection("items");
-				
-				if(!isTitleExists(title))
+
+				if (!isTitleExists(title))
 					collection.insert(new BasicDBObject().append("title", title).append("year", year));
 
 				this.mongoClient.close();
@@ -104,14 +118,14 @@ public class ItemsController extends ParentController {
 		HttpStatus status = HttpStatus.OK;
 		response.setStatus(status.value());
 	}
-	
+
 	public static boolean isTitleExists(String title) {
 		DBCollection collection = ParentController.getCollectionMethod("items");
 		DBCursor cursor = collection.find(new BasicDBObject().append("title", title));
 
 		Boolean result = (cursor.size() > 0);
 		ParentController._mongoClient.close();
-		
+
 		return result;
 	}
 

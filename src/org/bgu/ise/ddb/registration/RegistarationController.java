@@ -54,8 +54,14 @@ public class RegistarationController extends ParentController{
 			HttpServletResponse response){
 		System.out.println(username+" "+password+" "+lastname+" "+firstname);
 		
-			
 		try {
+			if(isExistUser(username)) {
+				HttpStatus status = HttpStatus.BAD_REQUEST;
+				response.setStatus(status.value());
+				
+				return;
+			}
+			
 			DBCollection collection = this.getCollection("users");
 						
 			collection.insert(new BasicDBObject()
